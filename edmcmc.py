@@ -5,7 +5,7 @@ import multiprocessing
 
 class mcmcstr:
     def __init__(self, chains, flatchains, allneglogl, flatneglogl, whichwalker, whichlink,
-                fullchains, nburnin, nlink, nwalkers, npar):
+                fullchains, fullneglogl, nburnin, nlink, nwalkers, npar):
         #self.walkers = walkers
         self.chains = chains
         self.flatchains = flatchains
@@ -19,12 +19,13 @@ class mcmcstr:
         self.nwalkers = nwalkers
         self.npar = npar
         self.lastpos = fullchains[:,nlink-1,:]
+        self.fullneglogl = fullneglogl
         
     def get_chains(self, nburnin = None, nthin = 1, flat=False):
         if nburnin == None: 
             nburnin = self.nburnin
         indices = nburnin + np.arange(np.floor((self.nlink - nburnin)/nthin)) * nthin
-        cutchains = self.chains[:,[int(index) for index in indices],:]
+        cutchains = self.fullchains[:,[int(index) for index in indices],:]
         if not flat: 
             return cutchains
         else: 
@@ -314,5 +315,5 @@ def edmcmc(function, startparams_in, width_in, nwalkers=50, nlink=10000, nburnin
 
     
     return(mcmcstr(chainsout, flatchainsout, allnegloglout, flatnegloglout, whichwalkerout, 
-                   whichlinkout, position, nburnin, nlink, nwalkers, npar))
+                   whichlinkout, position, allneglogl, nburnin, nlink, nwalkers, npar))
 
