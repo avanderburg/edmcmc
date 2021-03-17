@@ -59,10 +59,11 @@ class mcmcstr:
         return grstats
     
 def edmcmc(function, startparams_in, width_in, nwalkers=50, nlink=10000, nburnin=500, gamma_param=None, 
-          method='loglikelihood',parinfo=None, quiet=False, pos_in=None, args = None, ncores=1):
+          method='loglikelihood',parinfo=None, quiet=False, pos_in=None, args = None, ncores=1, bigjump=False):
     #method can be loglikelihood, chisq, or mpfit
     #outputs = pnew, perror, chains, whichwalker, whichlink, allneglogl, 
     #pos_in is an array with size (nwalkers, npar) of starting positions. 
+    
     
     possiblemethods = ['loglikelihood', 'negloglikelihood', 'chisq']
     if not method in possiblemethods: 
@@ -89,9 +90,9 @@ def edmcmc(function, startparams_in, width_in, nwalkers=50, nlink=10000, nburnin
         
     npar = len(startparams)
     
-    if nwalkers < 2 * npar:
-        print('Not enough walkers - increasing to 2x number of parameters')
-        nwalkers = 2 * npar
+    if nwalkers < 3 * npar or nwalkers <10:
+        print('Not enough walkers - increasing to 3x number of parameters or a minimum of 10.')
+        nwalkers = max((3 * npar, 10))
 
 
     onedimension = False
@@ -193,7 +194,7 @@ def edmcmc(function, startparams_in, width_in, nwalkers=50, nlink=10000, nburnin
     for i in range(1, nlink):
         js = randintbank1[i,:]#random.randint(nwalkers-1)
         ks = np.arange(nwalkers)
-        js = js + (js > ks)
+        js = js + (js >= ks)
         j2s = randintbank2[i,:]
         j2s = j2s + (j2s >= np.minimum(ks,js))
         j2s = j2s + (j2s >= np.maximum(ks,js))
@@ -202,8 +203,10 @@ def edmcmc(function, startparams_in, width_in, nwalkers=50, nlink=10000, nburnin
         jthpos = position[js,i-1,:]
         j2thpos = position[j2s,i-1,:]
         
+        thisgamma = gamma_param
+        if bigjump and i % 10 == 9: thisgamma = 1
+        newpars = position[:,i-1,:] + thisgamma * (1 + normalbank[i,:,:] * 1e-2) * (j2thpos-jthpos)
         
-        newpars = position[:,i-1,:] + gamma_param * (1 + normalbank[i,:,:] * 1e-2) * (j2thpos-jthpos)
         
         
         lowerlimits = newpars < llimits
