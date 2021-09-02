@@ -1,6 +1,6 @@
 # edmcmc
 <H3>Easy Differential-Evolution Markov Chain Monte Carlo (EDMCMC) in Python</H3>
-![EDMCMC](https://media1.giphy.com/media/IMe5BBRuJD6EL1zC2O/giphy.gif)
+<img src='https://media1.giphy.com/media/IMe5BBRuJD6EL1zC2O/giphy.gif' alt='EDMCMC', width=1000>
 
 <H3> How to Install </H3>
 
