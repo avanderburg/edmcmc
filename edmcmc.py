@@ -1,6 +1,5 @@
 import numpy as np
 import time
-import multiprocessing
 
 
 class mcmcstr:
@@ -59,11 +58,25 @@ class mcmcstr:
         return grstats
     
 def edmcmc(function, startparams_in, width_in, nwalkers=50, nlink=10000, nburnin=500, gamma_param=None, 
-          method='loglikelihood',parinfo=None, quiet=False, pos_in=None, args = None, ncores=1, bigjump=False):
+          method='loglikelihood',parinfo=None, quiet=False, pos_in=None, args = None, ncores=1, bigjump=False, m1mac=True):
     #method can be loglikelihood, chisq, or mpfit
     #outputs = pnew, perror, chains, whichwalker, whichlink, allneglogl, 
     #pos_in is an array with size (nwalkers, npar) of starting positions. 
-    
+    if ncores ==1: ncorestouse = 1
+    if ncores >1:
+        if not m1mac: import multiprocessing as mp
+        if m1mac: import multiprocess as mp
+            
+        numcorestotal = mp.cpu_count()
+        ncorestouse = round(ncores)
+        if ncorestouse > numcorestotal:
+            print('Asked for more cores than exist on the machine, limiting to ' + str(numcorestotal))
+            ncorestouse = numcorestotal
+        if ncorestouse < 1:
+            print('Asked for too few cores, reverting to 1')
+            ncorestouse = 1
+
+
     
     possiblemethods = ['loglikelihood', 'negloglikelihood', 'chisq']
     if not method in possiblemethods: 
@@ -72,14 +85,6 @@ def edmcmc(function, startparams_in, width_in, nwalkers=50, nlink=10000, nburnin
         
     width = np.copy(width_in)
     startparams = np.copy(startparams_in)
-    numcorestotal = multiprocessing.cpu_count()
-    ncorestouse = round(ncores)
-    if ncorestouse > numcorestotal:
-        print('Asked for more cores than exist on the machine, limiting to ' + str(numcorestotal))
-        ncorestouse = numcorestotal
-    if ncorestouse < 1:
-        print('Asked for too few cores, reverting to 1')
-        ncorestouse = 1
     
     if len(width) != len(startparams): 
         print('Length of width array not equal to length of startparams. Returning')
@@ -189,7 +194,7 @@ def edmcmc(function, startparams_in, width_in, nwalkers=50, nlink=10000, nburnin
     
 
 
-    if ncorestouse > 1: P = multiprocessing.Pool(processes=ncorestouse)
+    if ncorestouse > 1: P = mp.Pool(processes=ncorestouse)
 
     for i in range(1, nlink):
         js = randintbank1[i,:]#random.randint(nwalkers-1)
