@@ -32,7 +32,7 @@ class mcmcstr:
             for i in range(self.nwalkers):
                 for j in range(self.npar):
                     cutflatchains[i * (len(indices)):(i + 1)* (len(indices)), j] = cutchains[i,:,j]
-            return cutflatchains
+            return cutflatchains   
     
     def onegelmanrubin(self, chain): #taken from http://joergdietrich.github.io/emcee-convergence.html
         ssq = np.var(chain, axis=1, ddof=1)
@@ -58,7 +58,8 @@ class mcmcstr:
         return grstats
     
 def edmcmc(function, startparams_in, width_in, nwalkers=50, nlink=10000, nburnin=500, gamma_param=None, 
-          method='loglikelihood',parinfo=None, quiet=False, pos_in=None, args = None, ncores=1, bigjump=False, m1mac=True):
+          method='loglikelihood',parinfo=None, quiet=False, pos_in=None, args = None, ncores=1, bigjump=False,
+           m1mac=True,adapt=False):
     #method can be loglikelihood, chisq, or mpfit
     #outputs = pnew, perror, chains, whichwalker, whichlink, allneglogl, 
     #pos_in is an array with size (nwalkers, npar) of starting positions. 
@@ -139,6 +140,7 @@ def edmcmc(function, startparams_in, width_in, nwalkers=50, nlink=10000, nburnin
     
     position = np.zeros((nwalkers, (nlink), npar))    
     allneglogl = np.zeros((nwalkers, nlink))
+    accepted = np.zeros((nlink)) + np.nan
     lastneglogl = np.zeros(nwalkers) + np.inf
     allneglogl[:,0] = lastneglogl
     thispos = np.zeros((nwalkers, npar))
@@ -184,8 +186,11 @@ def edmcmc(function, startparams_in, width_in, nwalkers=50, nlink=10000, nburnin
         
         
     starttime = time.time()
+    lastprinttime = starttime
     naccept = 0.0
     ntotal = 0.0
+    ninstant = 10
+    instantrate = np.nan
     
     randintbank1 = np.random.randint(0, nwalkers-1, (nlink, nwalkers))
     randintbank2 = np.random.randint(0, nwalkers-2, (nlink, nwalkers))
@@ -208,7 +213,14 @@ def edmcmc(function, startparams_in, width_in, nwalkers=50, nlink=10000, nburnin
         jthpos = position[js,i-1,:]
         j2thpos = position[j2s,i-1,:]
         
+        if adapt and i % 10 == 9 and np.isfinite(instantrate): #Make adaptive changes to the gamma parameter to optimize the acceptance rate near 0.234. 
+            ratedifference = instantrate / 0.234
+            gamma_param = gamma_param * max([min([ratedifference, 1.5]), 0.5])
+
+        
         thisgamma = gamma_param
+        
+            
         if bigjump and i % 10 == 9: thisgamma = 1
         newpars = position[:,i-1,:] + thisgamma * (1 + normalbank[i,:,:] * 1e-2) * (j2thpos-jthpos)
         
@@ -272,16 +284,25 @@ def edmcmc(function, startparams_in, width_in, nwalkers=50, nlink=10000, nburnin
         lastneglogl = newneglogl
         allneglogl[:,i] = newneglogl
         naccept = naccept + np.sum(accept[:,0])
+        accepted[i] = np.sum(accept[:,0])
         ntotal = ntotal + nwalkers
-
-        tremaining = (time.time() - starttime)/float(i) * (nlink - i - 1.0)
+        
+        thistime = time.time()
+        tremaining = (thistime - starttime)/float(i) * (nlink - i - 1.0)
         days = np.floor(tremaining / 3600.0 / 24.0)
         hours = np.floor(tremaining / 3600.0 - 24 * days)
         minutes = np.floor(tremaining/60 - 24 * 60 * days - 60 * hours)
         seconds = (tremaining - 24 * 3600 * days - 3600 * hours - 60*minutes)
-        outstr = str(int(days)) + ' days, ' + str(int(hours)).zfill(2) + ':' + str(int(minutes)).zfill(2) + ':' + str(round(seconds, 1)).zfill(4) + ' remains. Link ' + str(i+1) + ' of ' +str(nlink) + '. Acceptance Rate= ' + str(round(naccept/ntotal,2))
+        if adapt and i > ninstant: 
+            instantrate = round(np.sum(accepted[i-ninstant:i])/(nwalkers*ninstant),2)
+            outstr = str(int(days)) + ' days, ' + str(int(hours)).zfill(2) + ':' + str(int(minutes)).zfill(2) + ':' + str(round(seconds, 1)).zfill(4) + ' remains. Link ' + str(i+1) + ' of ' +str(nlink) + '. Overall acceptance rate = ' + str(round(naccept/ntotal,2)) + ', instantaneous = ' + str(instantrate) 
+            
+        if (not adapt) or i < ninstant: 
+            instantrate = np.nan
+            outstr = str(int(days)) + ' days, ' + str(int(hours)).zfill(2) + ':' + str(int(minutes)).zfill(2) + ':' + str(round(seconds, 1)).zfill(4) + ' remains. Link ' + str(i+1) + ' of ' +str(nlink) + '. Acceptance rate = ' + str(round(naccept/ntotal,2))
         
-        if not quiet:
+        if not quiet and (thistime - lastprinttime > 0.01 or i == nlink -1):
+            lastprinttime = thistime
             print(outstr,end="\r")
             if i == nlink -1:
                 print(outstr)
