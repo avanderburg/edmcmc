@@ -7,6 +7,7 @@
 <b>Dependencies: </b>
 <ul>
   <li> numpy (tested on version 1.20.1, but no known compatibility issues) </li>
+  <li> <a href='https://pypi.org/project/multiprocess/'>multiprocess</a> (tested on version 0.70.12.2 but no known compatibility issues). Needed for parallelizing the likelihood calculation on Macs running Apple M1 processors. 
 </ul>
   
 <b>Installation:</b>
