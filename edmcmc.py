@@ -1,11 +1,11 @@
 import numpy as np
 import time
-
+import pdb
 
 class mcmcstr:
     def __init__(self, chains, flatchains, allneglogl, flatneglogl, whichwalker, whichlink,
-                fullchains, fullneglogl, nburnin, nlink, nwalkers, npar):
-        #self.walkers = walkers
+                fullchains, fullneglogl, nburnin, nlink, nwalkers, npar, acceptancerate):
+        self.acceptancerate = acceptancerate
         self.chains = chains
         self.flatchains = flatchains
         self.allneglogl = allneglogl
@@ -19,20 +19,45 @@ class mcmcstr:
         self.npar = npar
         self.lastpos = fullchains[:,nlink-1,:]
         self.fullneglogl = fullneglogl
+        mnll = np.unravel_index(np.argmin(fullneglogl, axis=None), fullneglogl.shape)
+        self.bestpar = fullchains[mnll[0],mnll[1],:]
         
-    def get_chains(self, nburnin = None, nthin = 1, flat=False):
+    def get_chains(self, nburnin = None, nthin = 1, flat=False, returnDiag=False):
         if nburnin == None: 
             nburnin = self.nburnin
         indices = nburnin + np.arange(np.floor((self.nlink - nburnin)/nthin)) * nthin
         cutchains = self.fullchains[:,[int(index) for index in indices],:]
+        
+        if returnDiag:
+            cutneglogl = self.fullneglogl[:,[int(index) for index in indices]]
+            fullwhichwalker = np.transpose(np.outer(np.ones(self.nlink), np.arange(self.nwalkers)))
+            cutwhichwalker = fullwhichwalker[:,[int(index) for index in indices]]
+            fullwhichlink = np.outer(np.ones(self.nwalkers), np.arange(self.nlink))
+            cutwhichlink = fullwhichlink[:,[int(index) for index in indices]]
+        
         if not flat: 
-            return cutchains
-        else: 
+            if not returnDiag: 
+                return cutchains
+            if returnDiag:
+                return cutchains,cutwhichlink, cutwhichwalker, cutneglogl
+        if flat: 
             cutflatchains = np.zeros((self.nwalkers * (len(indices)), self.npar))
+            if returnDiag: 
+                cutflatneglogl = np.zeros(self.nwalkers * (len(indices)))
+                cutflatwhichwalker = np.zeros(self.nwalkers * (len(indices)))
+                cutflatwhichlink = np.zeros(self.nwalkers * (len(indices)))
+                
             for i in range(self.nwalkers):
                 for j in range(self.npar):
                     cutflatchains[i * (len(indices)):(i + 1)* (len(indices)), j] = cutchains[i,:,j]
-            return cutflatchains   
+                if returnDiag:
+                    cutflatneglogl[i * (len(indices)):(i + 1)* (len(indices))] = cutneglogl[i,:]
+                    cutflatwhichwalker[i * (len(indices)):(i + 1)* (len(indices))] = cutwhichwalker[i,:]
+                    cutflatwhichlink[i * (len(indices)):(i + 1)* (len(indices))] = cutwhichlink[i,:]
+            if not returnDiag: 
+                return cutflatchains 
+            if returnDiag:
+                return cutflatchains, cutflatwhichlink, cutflatwhichwalker, cutflatneglogl#, ...
     
     def onegelmanrubin(self, chain): #taken from http://joergdietrich.github.io/emcee-convergence.html
         ssq = np.var(chain, axis=1, ddof=1)
@@ -59,7 +84,7 @@ class mcmcstr:
     
 def edmcmc(function, startparams_in, width_in, nwalkers=50, nlink=10000, nburnin=500, gamma_param=None, 
           method='loglikelihood',parinfo=None, quiet=False, pos_in=None, args = None, ncores=1, bigjump=False,
-           m1mac=True,adapt=False):
+           m1mac=True,adapt=False, dispersion_param = 1e-2):
     #method can be loglikelihood, chisq, or mpfit
     #outputs = pnew, perror, chains, whichwalker, whichlink, allneglogl, 
     #pos_in is an array with size (nwalkers, npar) of starting positions. 
@@ -222,7 +247,7 @@ def edmcmc(function, startparams_in, width_in, nwalkers=50, nlink=10000, nburnin
         
             
         if bigjump and i % 10 == 9: thisgamma = 1
-        newpars = position[:,i-1,:] + thisgamma * (1 + normalbank[i,:,:] * 1e-2) * (j2thpos-jthpos)
+        newpars = position[:,i-1,:] + thisgamma * (1 + normalbank[i,:,:] * dispersion_param) * (j2thpos-jthpos)
         
         
         
@@ -344,5 +369,5 @@ def edmcmc(function, startparams_in, width_in, nwalkers=50, nlink=10000, nburnin
 
     
     return(mcmcstr(chainsout, flatchainsout, allnegloglout, flatnegloglout, whichwalkerout, 
-                   whichlinkout, position, allneglogl, nburnin, nlink, nwalkers, npar))
+                   whichlinkout, position, allneglogl, nburnin, nlink, nwalkers, npar, acceptancerate=naccept/ntotal))
 
